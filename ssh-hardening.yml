@@ -1,0 +1,113 @@
+---
+- name: SSH Hardening for Debian/Ubuntu systems
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    sshd_config_path: /etc/ssh/sshd_config
+    sshd_config_backup: /etc/ssh/sshd_config.bak
+
+  tasks:
+    - name: Ensure openssh-server is installed
+      ansible.builtin.apt:
+        name: openssh-server
+        state: present
+        update_cache: true
+      tags: [ssh, install]
+
+    - name: Backup current sshd_config
+      ansible.builtin.copy:
+        src: "{{ sshd_config_path }}"
+        dest: "{{ sshd_config_backup }}"
+        remote_src: true
+        mode: '0600'
+      when: sshd_config_path is file
+      tags: [ssh, backup]
+
+    - name: Disable root password login
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin prohibit-password'
+        state: present
+      tags: [ssh, harden]
+
+    - name: Disable password authentication globally
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+        state: present
+      tags: [ssh, harden]
+
+    - name: Disable challenge-response authentication
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?ChallengeResponseAuthentication'
+        line: 'ChallengeResponseAuthentication no'
+        state: present
+      tags: [ssh, harden]
+
+    - name: Enforce public key authentication
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?PubkeyAuthentication'
+        line: 'PubkeyAuthentication yes'
+        state: present
+      tags: [ssh, harden]
+
+    - name: Disable empty passwords
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?PermitEmptyPasswords'
+        line: 'PermitEmptyPasswords no'
+        state: present
+      tags: [ssh, harden]
+
+    - name: Limit SSH to IPv4 only (optional)
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?AddressFamily'
+        line: 'AddressFamily inet'
+        state: present
+      tags: [ssh, optional]
+
+    - name: Set login grace time (prevents brute force)
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?LoginGraceTime'
+        line: 'LoginGraceTime 30'
+        state: present
+      tags: [ssh, optional]
+
+    - name: Limit max authentication tries
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?MaxAuthTries'
+        line: 'MaxAuthTries 3'
+        state: present
+      tags: [ssh, optional]
+
+    - name: Set client alive intervals to disconnect idle sessions
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?ClientAliveInterval'
+        line: 'ClientAliveInterval 300'
+        state: present
+      tags: [ssh, optional]
+
+    - name: Set max client alive count
+      ansible.builtin.lineinfile:
+        path: "{{ sshd_config_path }}"
+        regexp: '^#?ClientAliveCountMax'
+        line: 'ClientAliveCountMax 2'
+        state: present
+      tags: [ssh, optional]
+
+    - name: Restart SSH service
+      ansible.builtin.systemd:
+        name: ssh
+        state: restarted
+        enabled: true
+      tags: [ssh, restart]
