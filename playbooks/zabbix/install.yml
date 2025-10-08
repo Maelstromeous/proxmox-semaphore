@@ -77,12 +77,26 @@
         group: zabbix
         mode: "0400"
 
+    - name: Force Hostname to actual hostname (override default "Zabbix server")
+      lineinfile:
+        path: "{{ zbx_agent_conf }}"
+        regexp: '^Hostname='
+        line: "Hostname={{ ansible_hostname }}"
+      notify: restart zabbix-agent2
+
+    - name: Remove HostnameItem to avoid conflict
+      lineinfile:
+        path: "{{ zbx_agent_conf }}"
+        regexp: '^HostnameItem='
+        state: absent
+      notify: restart zabbix-agent2
+
     - name: Configure zabbix_agent2.conf
       blockinfile:
         path: "{{ zbx_agent_conf }}"
         marker: "# {mark} ANSIBLE MANAGED ZABBIX AGENT2"
         block: |
-          HostnameItem=system.hostname
+          Hostname={{ ansible_hostname }}
 
           Server={{ zbx_server_effective }}
           ServerActive={{ zbx_server_effective }}:{{ zbx_server_port }}
