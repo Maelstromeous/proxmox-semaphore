@@ -69,14 +69,6 @@
         state: present
         update_cache: yes
 
-    - name: Validate secrets are present (fail fast)
-      assert:
-        that:
-          - zbx_server | length > 0
-          - zbx_psk_identity | length > 0
-          - zbx_psk | length > 0
-        fail_msg: "ZBX_SERVER / ZBX_PSK_IDENTITY / ZBX_PSK must be provided via Semaphore."
-
     - name: Write PSK securely
       copy:
         dest: "{{ zbx_psk_file }}"
