@@ -1,0 +1,24 @@
+---
+- name: Install common packages on all hosts
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    # Define your package list here
+    common_packages:
+      - htop
+      - net-tools
+
+  tasks:
+    - name: Ensure apt cache is updated
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      tags: [packages, apt]
+
+    - name: Install common packages
+      ansible.builtin.apt:
+        name: "{{ common_packages }}"
+        state: present
+      tags: [packages, install]
