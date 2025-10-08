@@ -5,9 +5,9 @@
 
   # Pull from extra-vars or env FIRST, fall back to group_vars if set there
   vars:
-    zbx_server: "{{ zbx_server | default(lookup('env','ZBX_SERVER')) }}"
-    zbx_psk_identity: "{{ zbx_psk_identity | default(lookup('env','ZBX_PSK_IDENTITY')) }}"
-    zbx_psk: "{{ zbx_psk | default(lookup('env','ZBX_PSK')) }}"
+    zbx_server_effective: "{{ lookup('env','ZBX_SERVER') | default('', true) }}"
+    zbx_psk_identity_effective: "{{ lookup('env','ZBX_PSK_IDENTITY') | default('', true) }}"
+    zbx_psk_effective: "{{ lookup('env','ZBX_PSK') | default('', true) }}"
 
     zbx_repo_base: "https://repo.zabbix.com/zabbix/{{ zabbix_version }}/{{ ansible_distribution | lower }}"
     zbx_repo_dist: "{{ ansible_lsb.codename | default(ansible_distribution_release) }}"
@@ -17,16 +17,24 @@
     zbx_agent_conf: "/etc/zabbix/zabbix_agent2.conf"
 
   pre_tasks:
-    - name: Ensure base packages
-      apt:
-        name: [ca-certificates, gnupg, lsb-release, curl, python3-apt]
-        state: present
-        update_cache: yes
+    - name: Validate secrets are present (fail fast)
+      assert:
+        that:
+          - (zbx_server_effective | length) > 0
+          - (zbx_psk_identity_effective | length) > 0
+          - (zbx_psk_effective | length) > 0
+        fail_msg: "ZBX_SERVER / ZBX_PSK_IDENTITY / ZBX_PSK must be provided via Semaphore Environment variables."
 
     - name: Remove manual Zabbix repo file if present (avoid conflicts)
       file:
         path: "/etc/apt/sources.list.d/zabbix.list"
         state: absent
+
+    - name: Ensure base packages
+      apt:
+        name: [ca-certificates, gnupg, lsb-release, curl, python3-apt]
+        state: present
+        update_cache: yes
 
     - name: Compute zabbix-release tag (debianN / ubuntuXX.XX)
       set_fact:
@@ -72,7 +80,7 @@
     - name: Write PSK securely
       copy:
         dest: "{{ zbx_psk_file }}"
-        content: "{{ zbx_psk }}\n"
+        content: "{{ zbx_psk_effective }}\n"
         owner: zabbix
         group: zabbix
         mode: "0400"
