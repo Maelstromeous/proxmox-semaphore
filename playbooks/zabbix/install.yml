@@ -92,7 +92,7 @@
 
           TLSConnect=psk
           TLSAccept=psk
-          TLSPSKIdentity={{ zbx_psk_identity }}
+          TLSPSKIdentity={{ zbx_psk_identity_effective }}
           TLSPSKFile={{ zbx_psk_file }}
       notify: restart zabbix-agent2
 
