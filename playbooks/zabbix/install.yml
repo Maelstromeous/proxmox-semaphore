@@ -23,28 +23,32 @@
         state: present
         update_cache: yes
 
-    - name: Detect distro codename from /etc/os-release
-      shell: . /etc/os-release && echo $VERSION_CODENAME
-      register: os_codename
-      changed_when: false
-      failed_when: false
+    - name: Remove manual Zabbix repo file if present (avoid conflicts)
+      file:
+        path: "/etc/apt/sources.list.d/zabbix.list"
+        state: absent
 
-    - name: Set repo codename fact
+    - name: Compute zabbix-release tag (debianN / ubuntuXX.XX)
       set_fact:
-        zbx_repo_dist_fact: "{{ os_codename.stdout | default(ansible_lsb.codename | default(ansible_distribution_release)) }}"
+        zbx_os_id: "{{ ansible_distribution | lower }}"
+        zbx_release_tag: >-
+          {{ ('debian' ~ ansible_distribution_major_version)
+             if (ansible_distribution | lower) == 'debian'
+             else ('ubuntu' ~ ansible_distribution_version) }}
 
-    - name: Add Zabbix GPG key
+    - name: Download Zabbix release package {{ zabbix_version }} for {{ zbx_release_tag }}
       get_url:
-        url: "{{ zbx_gpg_key_url }}"
-        dest: /usr/share/keyrings/zabbix-official-archive-keyring.asc
+        url: "https://repo.zabbix.com/zabbix/{{ zabbix_version }}/release/{{ zbx_os_id }}/pool/main/z/zabbix-release/zabbix-release_latest_{{ zabbix_version }}+{{ zbx_release_tag }}_all.deb"
+        dest: "/tmp/zabbix-release_{{ zabbix_version }}+{{ zbx_release_tag }}.deb"
         mode: "0644"
 
-    - name: Add Zabbix apt repo
-      copy:
-        dest: "{{ zbx_apt_list }}"
-        mode: "0644"
-        content: |
-          deb [signed-by=/usr/share/keyrings/zabbix-official-archive-keyring.asc] {{ zbx_repo_base }} {{ zbx_repo_dist_fact }} main
+    - name: Install Zabbix repo (zabbix-release)
+      apt:
+        deb: "/tmp/zabbix-release_{{ zabbix_version }}+{{ zbx_release_tag }}.deb"
+
+    - name: apt update after adding zabbix-release
+      apt:
+        update_cache: yes
 
   tasks:
     - name: Update apt cache
