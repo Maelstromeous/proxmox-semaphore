@@ -1,5 +1,5 @@
 - name: Install & enroll Zabbix Agent2
-  hosts: zbx_agents
+  hosts: sandbox
   become: true
   gather_facts: true
 
