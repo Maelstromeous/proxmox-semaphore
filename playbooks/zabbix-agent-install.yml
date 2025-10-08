@@ -1,0 +1,105 @@
+- name: Install & enroll Zabbix Agent2
+  hosts: zbx_agents
+  become: true
+  gather_facts: true
+
+  # Pull from extra-vars or env FIRST, fall back to group_vars if set there
+  vars:
+    zbx_server: "{{ zbx_server | default(lookup('env','ZBX_SERVER')) }}"
+    zbx_psk_identity: "{{ zbx_psk_identity | default(lookup('env','ZBX_PSK_IDENTITY')) }}"
+    zbx_psk: "{{ zbx_psk | default(lookup('env','ZBX_PSK')) }}"
+
+    zbx_repo_base: "https://repo.zabbix.com/zabbix/{{ zabbix_version }}/{{ ansible_distribution | lower }}"
+    zbx_repo_dist: "{{ ansible_lsb.codename | default(ansible_distribution_release) }}"
+    zbx_apt_list: "/etc/apt/sources.list.d/zabbix.list"
+    zbx_gpg_key_url: "https://repo.zabbix.com/zabbix-official-repo.key"
+    zbx_psk_file: "/etc/zabbix/zabbix_agent2.psk"
+    zbx_agent_conf: "/etc/zabbix/zabbix_agent2.conf"
+
+  pre_tasks:
+    - name: Ensure base packages
+      apt:
+        name: [ca-certificates, gnupg, lsb-release, curl, python3-apt]
+        state: present
+        update_cache: yes
+
+    - name: Detect distro codename from /etc/os-release
+      shell: . /etc/os-release && echo $VERSION_CODENAME
+      register: os_codename
+      changed_when: false
+      failed_when: false
+
+    - name: Set repo codename fact
+      set_fact:
+        zbx_repo_dist_fact: "{{ os_codename.stdout | default(ansible_lsb.codename | default(ansible_distribution_release)) }}"
+
+    - name: Add Zabbix GPG key
+      get_url:
+        url: "{{ zbx_gpg_key_url }}"
+        dest: /usr/share/keyrings/zabbix-official-archive-keyring.asc
+        mode: "0644"
+
+    - name: Add Zabbix apt repo
+      copy:
+        dest: "{{ zbx_apt_list }}"
+        mode: "0644"
+        content: |
+          deb [signed-by=/usr/share/keyrings/zabbix-official-archive-keyring.asc] {{ zbx_repo_base }} {{ zbx_repo_dist_fact }} main
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install zabbix-agent2 (+ selective plugins)
+      apt:
+        name: "{{ ['zabbix-agent2'] + (zbx_agent2_plugins | default([])) }}"
+        state: present
+        update_cache: yes
+
+    - name: Validate secrets are present (fail fast)
+      assert:
+        that:
+          - zbx_server | length > 0
+          - zbx_psk_identity | length > 0
+          - zbx_psk | length > 0
+        fail_msg: "ZBX_SERVER / ZBX_PSK_IDENTITY / ZBX_PSK must be provided via Semaphore."
+
+    - name: Write PSK securely
+      copy:
+        dest: "{{ zbx_psk_file }}"
+        content: "{{ zbx_psk }}\n"
+        owner: zabbix
+        group: zabbix
+        mode: "0400"
+
+    - name: Configure zabbix_agent2.conf
+      blockinfile:
+        path: "{{ zbx_agent_conf }}"
+        marker: "# {mark} ANSIBLE MANAGED ZABBIX AGENT2"
+        block: |
+          HostnameItem=system.hostname
+
+          Server={{ zbx_server }}
+          ServerActive={{ zbx_server }}:{{ zbx_server_port }}
+          ListenPort={{ zbx_listen_port }}
+
+          HostMetadata={{ zbx_host_metadata }}
+
+          TLSConnect=psk
+          TLSAccept=psk
+          TLSPSKIdentity={{ zbx_psk_identity }}
+          TLSPSKFile={{ zbx_psk_file }}
+      notify: restart zabbix-agent2
+
+    - name: Enable & start agent
+      systemd:
+        name: zabbix-agent2
+        enabled: true
+        state: started
+
+  handlers:
+    - name: restart zabbix-agent2
+      systemd:
+        name: zabbix-agent2
+        state: restarted

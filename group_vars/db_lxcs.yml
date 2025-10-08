@@ -1,0 +1,3 @@
+zbx_agent2_plugins:
+  - zabbix-agent2-plugin-mysql     # for MariaDB/MySQL hosts
+  - zabbix-agent2-plugin-postgresql  # if any are Postgres

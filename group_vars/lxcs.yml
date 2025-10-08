@@ -1,0 +1,2 @@
+zbx_agent2_plugins: []  # most containers don't need hardware/plugins
+zbx_host_metadata: "linux,lxc"

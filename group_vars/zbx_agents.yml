@@ -1,0 +1,10 @@
+# group_vars/zbx_agents.yml
+zabbix_version: "7.4"
+zbx_listen_port: 10050
+zbx_server_port: 10051
+zbx_host_metadata: "linux,lxc"        # for auto-registration in Zabbix
+
+# These are intentionally left blank here; provided by Semaphore:
+# zbx_server: ""           # IP/DNS of Zabbix server or proxy
+# zbx_psk_identity: ""     # e.g. "zbx-homelab"
+# zbx_psk: ""              # 64-hex char PSK

@@ -1,0 +1,2 @@
+zbx_agent2_plugins:
+  - zabbix-agent2-plugin-redis
