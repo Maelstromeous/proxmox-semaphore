@@ -1,2 +1,1 @@
-zbx_agent2_plugins:
-  - zabbix-agent2-plugin-redis
+zbx_host_metadata: "linux,lxc,redis"

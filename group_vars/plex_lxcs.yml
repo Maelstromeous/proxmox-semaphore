@@ -1,2 +1,1 @@
-zbx_agent2_plugins: []      # No hardware plugins
 zbx_host_metadata: "linux,lxc,plex"

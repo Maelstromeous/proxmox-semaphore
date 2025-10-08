@@ -63,9 +63,9 @@
       apt:
         update_cache: yes
 
-    - name: Install zabbix-agent2 (+ selective plugins)
+    - name: Install zabbix-agent2
       apt:
-        name: "{{ ['zabbix-agent2'] + (zbx_agent2_plugins | default([])) }}"
+        name: "zabbix-agent2"
         state: present
         update_cache: yes
 
