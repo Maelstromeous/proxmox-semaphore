@@ -1,5 +1,3 @@
 zbx_agent2_plugins:
-  - zabbix-agent2-plugin-smart
-  - zabbix-agent2-plugin-nvme
   # - zabbix-agent2-plugin-ipmi   # if applicable
 zbx_host_metadata: "linux,pve"
