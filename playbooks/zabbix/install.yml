@@ -84,8 +84,8 @@
         block: |
           HostnameItem=system.hostname
 
-          Server={{ zbx_server }}
-          ServerActive={{ zbx_server }}:{{ zbx_server_port }}
+          Server={{ zbx_server_effective }}
+          ServerActive={{ zbx_server_effective }}:{{ zbx_server_port }}
           ListenPort={{ zbx_listen_port }}
 
           HostMetadata={{ zbx_host_metadata }}
