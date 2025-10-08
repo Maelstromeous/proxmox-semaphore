@@ -1,4 +1,3 @@
-# group_vars/zbx_agents.yml
 zabbix_version: "7.4"
 zbx_listen_port: 10050
 zbx_server_port: 10051
