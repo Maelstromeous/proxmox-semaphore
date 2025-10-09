@@ -6,8 +6,6 @@
   # Pull from extra-vars or env FIRST, fall back to group_vars if set there
   vars:
     zbx_server_effective: "{{ lookup('env','ZBX_SERVER') | default('', true) }}"
-    zbx_psk_identity_effective: "{{ lookup('env','ZBX_PSK_IDENTITY') | default('', true) }}"
-    zbx_psk_effective: "{{ lookup('env','ZBX_PSK') | default('', true) }}"
 
     zbx_repo_base: "https://repo.zabbix.com/zabbix/{{ zabbix_version }}/{{ ansible_distribution | lower }}"
     zbx_repo_dist: "{{ ansible_lsb.codename | default(ansible_distribution_release) }}"
@@ -21,9 +19,7 @@
       assert:
         that:
           - (zbx_server_effective | length) > 0
-          - (zbx_psk_identity_effective | length) > 0
-          - (zbx_psk_effective | length) > 0
-        fail_msg: "ZBX_SERVER / ZBX_PSK_IDENTITY / ZBX_PSK must be provided via Semaphore Environment variables."
+        fail_msg: "ZBX_SERVER must be provided via Semaphore Environment variables."
 
     - name: Remove manual Zabbix repo file if present (avoid conflicts)
       file:
@@ -69,14 +65,6 @@
         state: present
         update_cache: yes
 
-    - name: Write PSK securely
-      copy:
-        dest: "{{ zbx_psk_file }}"
-        content: "{{ zbx_psk_effective }}\n"
-        owner: zabbix
-        group: zabbix
-        mode: "0400"
-
     - name: Force Hostname to actual hostname (override default "Zabbix server")
       lineinfile:
         path: "{{ zbx_agent_conf }}"
@@ -104,10 +92,8 @@
 
           HostMetadata={{ zbx_host_metadata }}
 
-          TLSConnect=psk
-          TLSAccept=psk
-          TLSPSKIdentity={{ zbx_psk_identity_effective }}
-          TLSPSKFile={{ zbx_psk_file }}
+          TLSConnect=unencrypted
+          TLSAccept=unencrypted
       notify: restart zabbix-agent2
 
     - name: Enable & start agent
