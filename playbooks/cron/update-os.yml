@@ -4,7 +4,6 @@
   hosts: all
   become: true
   gather_facts: false
-  ignore_unreachable: true
 
   vars:
     # Upgrade strategy: "safe" (like apt-get upgrade) or "dist" (aka full/ dist-upgrade)
@@ -18,13 +17,25 @@
 
   # Clears down hosts e.g. Chronos
   pre_tasks:
-    - name: Drop unreachable hosts early
-      ansible.builtin.ping:
-      register: ping_result
+    - name: Check SSH reachability from controller (no UNREACHABLE side-effects)
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host | default(inventory_hostname) }}"
+        port: 22
+        timeout: 3
+        state: started
+      delegate_to: localhost
+      register: ssh_probe
+      failed_when: false
       ignore_errors: true
-    - name: End host if unreachable
+
+    - name: End host if SSH not reachable
       ansible.builtin.meta: end_host
-      when: ping_result is failed
+      when: ssh_probe is failed or ssh_probe.state is not defined
+
+    - name: Gather facts safely (only runs for remaining hosts)
+      ansible.builtin.setup:
+      failed_when: false
+      ignore_errors: true
 
   tasks:
     - name: Refresh apt cache (if stale)
