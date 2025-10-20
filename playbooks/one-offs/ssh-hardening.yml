@@ -1,23 +1,43 @@
 ---
 - name: SSH Hardening for Debian/Ubuntu systems
   hosts: all
-  ignore_unreachable: true
   become: true
   gather_facts: true
+  strategy: free              # <-- hosts don't wait for each other
+  any_errors_fatal: false
 
   vars:
     sshd_config_path: /etc/ssh/sshd_config
     sshd_config_backup: /etc/ssh/sshd_config.bak
 
+  pre_tasks:
+    - name: Skip unreachable hosts early
+      ansible.builtin.ping:
+      register: ping_result
+      ignore_errors: true
+
+    - name: Remove host from play if unreachable
+      ansible.builtin.meta: end_host
+      when: ping_result is failed
+
   tasks:
-    - name: Ensure openssh-server is installed
+    - name: Ensure openssh-server is installed (tolerant of dpkg locks)
       ansible.builtin.apt:
         name: openssh-server
         state: present
         update_cache: true
+        cache_valid_time: 3600
+        force_apt_get: true
+        lock_timeout: 120
+      environment:
+        DEBIAN_FRONTEND: noninteractive
       tags: [ssh, install]
+      # Optional safety net if apt sometimes hangs longer than you'd like:
+      # async: 600
+      # poll: 10
 
-    - name: Backup current sshd_config
+    - name: Backup current sshd_config (if it exists)
+        # copy fails if src missing unless remote_src + 'when' check
       ansible.builtin.copy:
         src: "{{ sshd_config_path }}"
         dest: "{{ sshd_config_backup }}"
@@ -32,6 +52,9 @@
         regexp: '^#?PermitRootLogin'
         line: 'PermitRootLogin prohibit-password'
         state: present
+        create: false
+        backrefs: false
+      notify: Restart SSH
       tags: [ssh, harden]
 
     - name: Disable password authentication globally
@@ -40,6 +63,7 @@
         regexp: '^#?PasswordAuthentication'
         line: 'PasswordAuthentication no'
         state: present
+      notify: Restart SSH
       tags: [ssh, harden]
 
     - name: Disable challenge-response authentication
@@ -48,6 +72,7 @@
         regexp: '^#?ChallengeResponseAuthentication'
         line: 'ChallengeResponseAuthentication no'
         state: present
+      notify: Restart SSH
       tags: [ssh, harden]
 
     - name: Enforce public key authentication
@@ -56,6 +81,7 @@
         regexp: '^#?PubkeyAuthentication'
         line: 'PubkeyAuthentication yes'
         state: present
+      notify: Restart SSH
       tags: [ssh, harden]
 
     - name: Disable empty passwords
@@ -64,6 +90,7 @@
         regexp: '^#?PermitEmptyPasswords'
         line: 'PermitEmptyPasswords no'
         state: present
+      notify: Restart SSH
       tags: [ssh, harden]
 
     - name: Limit SSH to IPv4 only (optional)
@@ -72,6 +99,7 @@
         regexp: '^#?AddressFamily'
         line: 'AddressFamily inet'
         state: present
+      notify: Restart SSH
       tags: [ssh, optional]
 
     - name: Set login grace time (prevents brute force)
@@ -80,6 +108,7 @@
         regexp: '^#?LoginGraceTime'
         line: 'LoginGraceTime 30'
         state: present
+      notify: Restart SSH
       tags: [ssh, optional]
 
     - name: Limit max authentication tries
@@ -88,6 +117,7 @@
         regexp: '^#?MaxAuthTries'
         line: 'MaxAuthTries 3'
         state: present
+      notify: Restart SSH
       tags: [ssh, optional]
 
     - name: Set client alive intervals to disconnect idle sessions
@@ -96,6 +126,7 @@
         regexp: '^#?ClientAliveInterval'
         line: 'ClientAliveInterval 300'
         state: present
+      notify: Restart SSH
       tags: [ssh, optional]
 
     - name: Set max client alive count
@@ -104,11 +135,12 @@
         regexp: '^#?ClientAliveCountMax'
         line: 'ClientAliveCountMax 2'
         state: present
+      notify: Restart SSH
       tags: [ssh, optional]
 
-    - name: Restart SSH service
-      ansible.builtin.systemd:
-        name: ssh
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh        # Debian/Ubuntu service name
         state: restarted
         enabled: true
-      tags: [ssh, restart]
