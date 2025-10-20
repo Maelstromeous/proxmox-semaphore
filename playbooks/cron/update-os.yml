@@ -3,7 +3,7 @@
 - name: Upgrade Debian/Ubuntu hosts to latest packages
   hosts: all
   become: true
-  gather_facts: true
+  gather_facts: false
 
   vars:
     # Upgrade strategy: "safe" (like apt-get upgrade) or "dist" (aka full/ dist-upgrade)
