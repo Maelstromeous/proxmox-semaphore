@@ -1,55 +1,30 @@
 ---
 - name: SSH Hardening for Debian/Ubuntu systems
   hosts: all
+  ignore_unreachable: true
   become: true
   gather_facts: true
 
   vars:
-    op_timeout: 120
-    poll_interval: 10
     sshd_config_path: /etc/ssh/sshd_config
     sshd_config_backup: /etc/ssh/sshd_config.bak
 
-  pre_tasks:
-    - name: Skip unreachable hosts early
-      ansible.builtin.ping:
-      register: ping_result
-      ignore_errors: true
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
-
-    - name: Remove host from play if unreachable
-      ansible.builtin.meta: end_host
-      when: ping_result is failed
-
   tasks:
-    - name: Ensure openssh-server is installed (bounded)
+    - name: Ensure openssh-server is installed
       ansible.builtin.apt:
         name: openssh-server
         state: present
         update_cache: true
-        cache_valid_time: 3600
-        force_apt_get: true
-        lock_timeout: "{{ op_timeout }}"
-      environment:
-        DEBIAN_FRONTEND: noninteractive
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, install]
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
-    - name: Backup current sshd_config (if it exists)
+    - name: Backup current sshd_config
       ansible.builtin.copy:
         src: "{{ sshd_config_path }}"
         dest: "{{ sshd_config_backup }}"
         remote_src: true
         mode: '0600'
-      when:
-        - sshd_config_path is file
-        - not (skip_ssh_hardening | default(false))
+      when: sshd_config_path is file
       tags: [ssh, backup]
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Disable root password login
       ansible.builtin.lineinfile:
@@ -57,11 +32,7 @@
         regexp: '^#?PermitRootLogin'
         line: 'PermitRootLogin prohibit-password'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Disable password authentication globally
       ansible.builtin.lineinfile:
@@ -69,11 +40,7 @@
         regexp: '^#?PasswordAuthentication'
         line: 'PasswordAuthentication no'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Disable challenge-response authentication
       ansible.builtin.lineinfile:
@@ -81,11 +48,7 @@
         regexp: '^#?ChallengeResponseAuthentication'
         line: 'ChallengeResponseAuthentication no'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Enforce public key authentication
       ansible.builtin.lineinfile:
@@ -93,11 +56,7 @@
         regexp: '^#?PubkeyAuthentication'
         line: 'PubkeyAuthentication yes'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Disable empty passwords
       ansible.builtin.lineinfile:
@@ -105,11 +64,7 @@
         regexp: '^#?PermitEmptyPasswords'
         line: 'PermitEmptyPasswords no'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Limit SSH to IPv4 only (optional)
       ansible.builtin.lineinfile:
@@ -117,11 +72,7 @@
         regexp: '^#?AddressFamily'
         line: 'AddressFamily inet'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Set login grace time (prevents brute force)
       ansible.builtin.lineinfile:
@@ -129,11 +80,7 @@
         regexp: '^#?LoginGraceTime'
         line: 'LoginGraceTime 30'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Limit max authentication tries
       ansible.builtin.lineinfile:
@@ -141,11 +88,7 @@
         regexp: '^#?MaxAuthTries'
         line: 'MaxAuthTries 3'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Set client alive intervals to disconnect idle sessions
       ansible.builtin.lineinfile:
@@ -153,11 +96,7 @@
         regexp: '^#?ClientAliveInterval'
         line: 'ClientAliveInterval 300'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
     - name: Set max client alive count
       ansible.builtin.lineinfile:
@@ -165,17 +104,11 @@
         regexp: '^#?ClientAliveCountMax'
         line: 'ClientAliveCountMax 2'
         state: present
-      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
-      notify: Restart SSH
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
 
-  handlers:
-    - name: Restart SSH
-      ansible.builtin.service:
+    - name: Restart SSH service
+      ansible.builtin.systemd:
         name: ssh
         state: restarted
         enabled: true
-      async: "{{ op_timeout }}"
-      poll: "{{ poll_interval }}"
+      tags: [ssh, restart]
