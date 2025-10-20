@@ -1,0 +1,32 @@
+---
+- name: Test Ansible connectivity and file operations
+  hosts: all
+  ignore_unreachable: true
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Create test file
+      ansible.builtin.copy:
+        content: "This is a test file created by Ansible.\n"
+        dest: /tmp/ansible_test.txt
+        mode: '0644'
+
+    - name: Verify file exists
+      ansible.builtin.stat:
+        path: /tmp/ansible_test.txt
+      register: test_file
+
+    - name: Print confirmation
+      ansible.builtin.debug:
+        msg: "✅ File created successfully on {{ inventory_hostname }}"
+      when: test_file.stat.exists
+
+    - name: Remove test file
+      ansible.builtin.file:
+        path: /tmp/ansible_test.txt
+        state: absent
+
+    - name: Confirm file removed
+      ansible.builtin.debug:
+        msg: "🧹 File removed from {{ inventory_hostname }}"
