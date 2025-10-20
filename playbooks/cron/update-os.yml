@@ -4,6 +4,7 @@
   hosts: all
   become: true
   gather_facts: false
+  ignore_unreachable: true
 
   vars:
     # Upgrade strategy: "safe" (like apt-get upgrade) or "dist" (aka full/ dist-upgrade)
