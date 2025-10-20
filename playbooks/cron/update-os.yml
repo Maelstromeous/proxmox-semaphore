@@ -16,6 +16,16 @@
     # Reboot timeout (seconds)
     reboot_timeout: 900
 
+  # Clears down hosts e.g. Chronos
+  pre_tasks:
+    - name: Drop unreachable hosts early
+      ansible.builtin.ping:
+      register: ping_result
+      ignore_errors: true
+    - name: End host if unreachable
+      ansible.builtin.meta: end_host
+      when: ping_result is failed
+
   tasks:
     - name: Refresh apt cache (if stale)
     # Ansible's apt module handles non-interactive use by default
