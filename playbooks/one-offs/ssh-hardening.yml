@@ -3,10 +3,10 @@
   hosts: all
   become: true
   gather_facts: true
-  strategy: free              # <-- hosts don't wait for each other
-  any_errors_fatal: false
 
   vars:
+    op_timeout: 120
+    poll_interval: 10
     sshd_config_path: /etc/ssh/sshd_config
     sshd_config_backup: /etc/ssh/sshd_config.bak
 
@@ -15,36 +15,41 @@
       ansible.builtin.ping:
       register: ping_result
       ignore_errors: true
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Remove host from play if unreachable
       ansible.builtin.meta: end_host
       when: ping_result is failed
 
   tasks:
-    - name: Ensure openssh-server is installed (tolerant of dpkg locks)
+    - name: Ensure openssh-server is installed (bounded)
       ansible.builtin.apt:
         name: openssh-server
         state: present
         update_cache: true
         cache_valid_time: 3600
         force_apt_get: true
-        lock_timeout: 120
+        lock_timeout: "{{ op_timeout }}"
       environment:
         DEBIAN_FRONTEND: noninteractive
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, install]
-      # Optional safety net if apt sometimes hangs longer than you'd like:
-      # async: 600
-      # poll: 10
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Backup current sshd_config (if it exists)
-        # copy fails if src missing unless remote_src + 'when' check
       ansible.builtin.copy:
         src: "{{ sshd_config_path }}"
         dest: "{{ sshd_config_backup }}"
         remote_src: true
         mode: '0600'
-      when: sshd_config_path is file
+      when:
+        - sshd_config_path is file
+        - not (skip_ssh_hardening | default(false))
       tags: [ssh, backup]
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Disable root password login
       ansible.builtin.lineinfile:
@@ -52,10 +57,11 @@
         regexp: '^#?PermitRootLogin'
         line: 'PermitRootLogin prohibit-password'
         state: present
-        create: false
-        backrefs: false
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Disable password authentication globally
       ansible.builtin.lineinfile:
@@ -63,8 +69,11 @@
         regexp: '^#?PasswordAuthentication'
         line: 'PasswordAuthentication no'
         state: present
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Disable challenge-response authentication
       ansible.builtin.lineinfile:
@@ -72,8 +81,11 @@
         regexp: '^#?ChallengeResponseAuthentication'
         line: 'ChallengeResponseAuthentication no'
         state: present
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Enforce public key authentication
       ansible.builtin.lineinfile:
@@ -81,8 +93,11 @@
         regexp: '^#?PubkeyAuthentication'
         line: 'PubkeyAuthentication yes'
         state: present
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Disable empty passwords
       ansible.builtin.lineinfile:
@@ -90,8 +105,11 @@
         regexp: '^#?PermitEmptyPasswords'
         line: 'PermitEmptyPasswords no'
         state: present
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, harden]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Limit SSH to IPv4 only (optional)
       ansible.builtin.lineinfile:
@@ -99,8 +117,11 @@
         regexp: '^#?AddressFamily'
         line: 'AddressFamily inet'
         state: present
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Set login grace time (prevents brute force)
       ansible.builtin.lineinfile:
@@ -108,8 +129,11 @@
         regexp: '^#?LoginGraceTime'
         line: 'LoginGraceTime 30'
         state: present
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Limit max authentication tries
       ansible.builtin.lineinfile:
@@ -117,8 +141,11 @@
         regexp: '^#?MaxAuthTries'
         line: 'MaxAuthTries 3'
         state: present
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Set client alive intervals to disconnect idle sessions
       ansible.builtin.lineinfile:
@@ -126,8 +153,11 @@
         regexp: '^#?ClientAliveInterval'
         line: 'ClientAliveInterval 300'
         state: present
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
     - name: Set max client alive count
       ansible.builtin.lineinfile:
@@ -135,12 +165,17 @@
         regexp: '^#?ClientAliveCountMax'
         line: 'ClientAliveCountMax 2'
         state: present
-      notify: Restart SSH
+      when: not (skip_ssh_hardening | default(false))
       tags: [ssh, optional]
+      notify: Restart SSH
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
 
   handlers:
     - name: Restart SSH
       ansible.builtin.service:
-        name: ssh        # Debian/Ubuntu service name
+        name: ssh
         state: restarted
         enabled: true
+      async: "{{ op_timeout }}"
+      poll: "{{ poll_interval }}"
