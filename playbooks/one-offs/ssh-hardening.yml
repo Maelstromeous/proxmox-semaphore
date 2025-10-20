@@ -1,6 +1,7 @@
 ---
 - name: SSH Hardening for Debian/Ubuntu systems
   hosts: all
+  ignore_unreachable: true
   become: true
   gather_facts: true
 

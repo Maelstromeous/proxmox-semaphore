@@ -1,5 +1,6 @@
 - name: Install & enroll Zabbix Agent2
   hosts: all:!zabbix_server
+  ignore_unreachable: true
   become: true
   gather_facts: true
 

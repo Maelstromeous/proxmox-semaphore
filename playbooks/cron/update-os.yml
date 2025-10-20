@@ -2,6 +2,7 @@
 # file: upgrade-debian-like.yml
 - name: Upgrade Debian/Ubuntu hosts to latest packages
   hosts: all
+  ignore_unreachable: true
   become: true
   gather_facts: true
 
