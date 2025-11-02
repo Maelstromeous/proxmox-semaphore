@@ -1,5 +1,5 @@
 ---
-- name: SSH Hardening for Debian/Ubuntu systems
+- name: Firewall implementation for public servers
   hosts: test_firewall
   ignore_unreachable: true
   become: true
