@@ -1,6 +1,6 @@
 ---
 - name: SSH Hardening for Debian/Ubuntu systems
-  hosts: all
+  hosts: test_firewall
   ignore_unreachable: true
   become: true
   gather_facts: true
