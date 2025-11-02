@@ -14,16 +14,16 @@ table inet host_isolation {
     policy drop;
 
     iif "lo" accept
-    ct state established,related accept;
+    ct state established,related accept
 
     # Allow DHCP client
-    udp sport 67 udp dport 68 accept;
+    udp sport 67 udp dport 68 accept
 
     # SSH from allowed hosts
-    tcp dport 22 ip saddr @ssh_allowed_v4 counter comment "ALLOW ssh" accept;
+    tcp dport 22 ip saddr @ssh_allowed_v4 counter comment "ALLOW ssh" accept
 
     # Drop only *new* inbound attempts from 10.0.5.0/24
-    ip saddr 10.0.5.0/24 ct state new counter comment "DROP new from 10.0.5.0/24" drop;
+    ip saddr 10.0.5.0/24 ct state new counter comment "DROP new from 10.0.5.0/24" drop
   }
 
   chain forward {
