@@ -1,0 +1,37 @@
+table inet host_isolation {
+  set ssh_allowed_v4 {
+    type ipv4_addr
+    elements = { {% for ip in allowed_ssh_v4 %}{{ ip }}{% if not loop.last %}, {% endif %}{% endfor %} }
+  }
+
+  chain input {
+    type filter hook input priority 0;
+    policy drop;
+
+    iif "lo" accept;
+    ct state established,related accept;
+
+    {% if allow_dhcp_client %}
+    # DHCP client (server->client replies)
+    udp sport 67 udp dport 68 accept;
+    {% endif %}
+
+    # SSH from approved sources only
+    tcp dport 22 ip saddr @ssh_allowed_v4 accept;
+
+    # Hard drop anything else from the blocked VLAN
+    ip saddr {{ block_cidr_v4 }} drop;
+
+    # Everything else inbound: drop by policy
+  }
+
+  chain forward {
+    type filter hook forward priority 0;
+    policy accept;
+  }
+
+  chain output {
+    type filter hook output priority 0;
+    policy accept; # outbound open (DNS to 1.1.1.1 etc.)
+  }
+}

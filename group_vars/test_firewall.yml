@@ -1,0 +1,5 @@
+block_cidr_v4: "10.0.5.0/24"
+allowed_ssh_v4:
+  - "10.0.5.3"
+  - "10.0.1.0/24"
+allow_dhcp_client: true

@@ -1,0 +1,34 @@
+- name: Ensure nftables present
+  package:
+    name: nftables
+    state: present
+
+- name: Ensure config dir exists
+  file:
+    path: /etc/nftables.d
+    state: directory
+    mode: "0755"
+
+- name: Deploy host isolation rules
+  template:
+    src: host_isolation.nft.j2
+    dest: /etc/nftables.d/host_isolation.nft
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Include /etc/nftables.d/*.nft from main config
+  lineinfile:
+    path: /etc/nftables.conf
+    create: true
+    line: 'include "/etc/nftables.d/*.nft"'
+    state: present
+
+- name: Enable + start nftables
+  service:
+    name: nftables
+    state: started
+    enabled: true
+
+- name: Reload nftables ruleset
+  command: nft -f /etc/nftables.conf
