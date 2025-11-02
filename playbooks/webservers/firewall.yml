@@ -1,8 +1,9 @@
 ---
 - name: Ensure nftables present
-  package:
+  ansible.builtin.apt:
     name: nftables
     state: present
+    update_cache: true
 
 - name: Ensure config dir exists
   file:
