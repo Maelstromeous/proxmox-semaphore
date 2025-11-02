@@ -1,28 +1,36 @@
 table inet host_isolation {
   set ssh_allowed_v4 {
     type ipv4_addr
-    elements = { {% for ip in allowed_ssh_v4 %}{{ ip }}{% if not loop.last %}, {% endif %}{% endfor %} }
+    flags interval
+    elements = {
+      {% for ip in allowed_ssh_v4 %}
+      {{ ip }}{% if not loop.last %}, {% endif %}
+      {% endfor %}
+    }
   }
 
   chain input {
     type filter hook input priority 0;
     policy drop;
 
+    # Allow loopback
     iif "lo" accept;
+
+    # Allow existing sessions
     ct state established,related accept;
 
     {% if allow_dhcp_client %}
-    # DHCP client (server->client replies)
+    # Allow DHCP client
     udp sport 67 udp dport 68 accept;
     {% endif %}
 
-    # SSH from approved sources only
+    # ✅ Allow SSH only from allowed sources
     tcp dport 22 ip saddr @ssh_allowed_v4 accept;
 
-    # Hard drop anything else from the blocked VLAN
+    # ❌ Drop *all other* traffic from 10.0.5.0/24
     ip saddr {{ block_cidr_v4 }} drop;
 
-    # Everything else inbound: drop by policy
+    # Everything else inbound is dropped by policy
   }
 
   chain forward {
@@ -32,6 +40,6 @@ table inet host_isolation {
 
   chain output {
     type filter hook output priority 0;
-    policy accept; # outbound open (DNS to 1.1.1.1 etc.)
+    policy accept; # outbound open (DNS → 1.1.1.1 works)
   }
 }
