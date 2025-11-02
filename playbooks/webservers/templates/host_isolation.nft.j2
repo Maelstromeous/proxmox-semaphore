@@ -13,24 +13,17 @@ table inet host_isolation {
     type filter hook input priority 0;
     policy drop;
 
-    # Allow loopback
-    iif "lo" accept;
+    iif "lo" accept
+    ct state established,related accept
 
-    # Allow existing sessions
-    ct state established,related accept;
-
-    {% if allow_dhcp_client %}
     # Allow DHCP client
-    udp sport 67 udp dport 68 accept;
-    {% endif %}
+    udp sport 67 udp dport 68 accept
 
-    # ✅ Allow SSH only from allowed sources
-    tcp dport 22 ip saddr @ssh_allowed_v4 accept;
+    # SSH from allowed hosts
+    tcp dport 22 ip saddr @ssh_allowed_v4 counter comment "ALLOW ssh" accept
 
-    # ❌ Drop *all other* traffic from 10.0.5.0/24
-    ip saddr {{ block_cidr_v4 }} drop;
-
-    # Everything else inbound is dropped by policy
+    # Drop only *new* inbound attempts from 10.0.5.0/24
+    ip saddr 10.0.5.0/24 ct state new counter comment "DROP new from 10.0.5.0/24" drop
   }
 
   chain forward {
