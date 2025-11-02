@@ -11,18 +11,19 @@ table inet host_isolation {
 
   chain input {
     type filter hook input priority 0;
-    policy drop;
+    policy accept;
 
     iif "lo" accept
     ct state established,related accept
 
-    # Allow DHCP client
+    # Allow DHCP client (optional when policy is accept, kept for clarity)
     udp sport 67 udp dport 68 accept
 
-    # SSH from allowed hosts
+    # SSH: allow only from approved sources, drop everyone else
     tcp dport 22 ip saddr @ssh_allowed_v4 counter accept comment "ALLOW ssh"
+    tcp dport 22 counter drop comment "DROP ssh from non-allowed"
 
-    # Drop only *new* inbound attempts from 10.0.5.0/24
+    # Block only *new* inbound attempts from 10.0.5.0/24 (exceptions above still apply)
     ip saddr 10.0.5.0/24 ct state new counter drop comment "DROP new from 10.0.5.0/24"
   }
 
