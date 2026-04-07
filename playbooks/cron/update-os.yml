@@ -3,7 +3,7 @@
 - name: Upgrade Debian/Ubuntu hosts to latest packages
   hosts: all
   become: true
-  gather_facts: false # handled by bootstrap_and_check.yml to ignore dead hosts
+  gather_facts: false # handled by bootstrap-and-check.yml to ignore dead hosts
 
   vars:
     upgrade_type: "dist"
@@ -13,7 +13,7 @@
 
   pre_tasks:
     - name: Bootstrap & validate host reachability
-      import_tasks: ../common/bootstrap_and_check.yml
+      import_tasks: ../common/bootstrap-and-check.yml
 
   tasks:
     - name: Refresh apt cache (if stale)
