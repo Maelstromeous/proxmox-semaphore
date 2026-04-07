@@ -1,0 +1,7 @@
+- name: Test Pushover Notification
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Deliberate failure
+      fail:
+        msg: "Testing Pushover callback"
