@@ -1,11 +1,11 @@
-- name: Bootstrap python3 (required for fact gathering)
+- name: "PRETASK: Bootstrap python3 (required for fact gathering)"
   raw: apt-get install -y python3 python3-apt
   changed_when: false
 
-- name: Gather facts (now that python3 is present)
+- name: "PRETASK: Gather facts (now that python3 is present)"
   setup:
   ignore_errors: true
 
-- name: Skip host if facts unavailable (host offline)
+- name: "PRETASK: Skip host if facts unavailable (host offline)"
   meta: end_host
   when: ansible_distribution is undefined
