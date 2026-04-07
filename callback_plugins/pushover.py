@@ -73,11 +73,3 @@ class CallbackModule(CallbackBase):
             message=f'Host: {host}\nTask: {task}',
             priority=0
         )
-
-    def v2_runner_on_unreachable(self, result):
-        host = result._host.get_name()
-        self._send(
-            title=f'Ansible Unreachable — {self.play_name}',
-            message=f'Host: {host} is unreachable',
-            priority=0
-        )
