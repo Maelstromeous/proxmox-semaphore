@@ -2,20 +2,21 @@
   hosts: all:!zabbix_server
   ignore_unreachable: true
   become: true
-  gather_facts: true
-
-  # Pull from extra-vars or env FIRST, fall back to group_vars if set there
+  gather_facts: false
   vars:
     zbx_server_effective: "{{ lookup('env','ZBX_SERVER') | default('', true) }}"
-
-    zbx_repo_base: "https://repo.zabbix.com/zabbix/{{ zabbix_version }}/{{ ansible_distribution | lower }}"
-    zbx_repo_dist: "{{ ansible_lsb.codename | default(ansible_distribution_release) }}"
     zbx_apt_list: "/etc/apt/sources.list.d/zabbix.list"
     zbx_gpg_key_url: "https://repo.zabbix.com/zabbix-official-repo.key"
     zbx_psk_file: "/etc/zabbix/zabbix_agent2.psk"
     zbx_agent_conf: "/etc/zabbix/zabbix_agent2.conf"
-
   pre_tasks:
+    - name: Bootstrap python3 (required for fact gathering)
+      raw: apt-get install -y python3 python3-apt
+      changed_when: false
+
+    - name: Gather facts (now that python3 is present)
+      setup:
+
     - name: Validate secrets are present (fail fast)
       assert:
         that:
@@ -86,13 +87,10 @@
         marker: "# {mark} ANSIBLE MANAGED ZABBIX AGENT2"
         block: |
           Hostname={{ ansible_hostname }}
-
           Server={{ zbx_server_effective }}
           ServerActive={{ zbx_server_effective }}:{{ zbx_server_port }}
           ListenPort={{ zbx_listen_port }}
-
           HostMetadata={{ zbx_host_metadata }}
-
           TLSConnect=unencrypted
           TLSAccept=unencrypted
       notify: restart zabbix-agent2
