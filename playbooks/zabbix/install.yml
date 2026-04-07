@@ -10,12 +10,13 @@
     zbx_psk_file: "/etc/zabbix/zabbix_agent2.psk"
     zbx_agent_conf: "/etc/zabbix/zabbix_agent2.conf"
   pre_tasks:
-    - name: Bootstrap python3 (required for fact gathering)
-      raw: apt-get install -y python3 python3-apt
-      changed_when: false
-
     - name: Gather facts (now that python3 is present)
       setup:
+      ignore_errors: true
+
+    - name: Skip host if facts unavailable (host offline)
+      meta: end_host
+      when: ansible_distribution is undefined
 
     - name: Validate secrets are present (fail fast)
       assert:
