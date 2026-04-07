@@ -2,13 +2,17 @@
 - name: Install common packages on all hosts
   hosts: all
   become: true
-  gather_facts: true
+  gather_facts: false # handled by bootstrap_and_check.yml to ignore dead hosts
 
   vars:
     # Define your package list here
     common_packages:
       - htop
       - net-tools
+
+  pre_tasks:
+    - name: Bootstrap & validate host reachability
+      import_tasks: ../common/bootstrap_and_check.yml
 
   tasks:
     - name: Ensure apt cache is updated

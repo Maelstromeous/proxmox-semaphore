@@ -3,39 +3,17 @@
 - name: Upgrade Debian/Ubuntu hosts to latest packages
   hosts: all
   become: true
-  gather_facts: false
+  gather_facts: false # handled by bootstrap_and_check.yml to ignore dead hosts
 
   vars:
-    # Upgrade strategy: "safe" (like apt-get upgrade) or "dist" (aka full/ dist-upgrade)
     upgrade_type: "dist"
-    # Only refresh apt cache if it's older than this (seconds)
     cache_valid_time: 3600
-    # Reboot if /var/run/reboot-required exists
     reboot_if_required: true
-    # Reboot timeout (seconds)
     reboot_timeout: 900
 
-  # Clears down hosts e.g. Chronos
   pre_tasks:
-    - name: Check SSH reachability from controller (no UNREACHABLE side-effects)
-      ansible.builtin.wait_for:
-        host: "{{ ansible_host | default(inventory_hostname) }}"
-        port: 22
-        timeout: 3
-        state: started
-      delegate_to: localhost
-      register: ssh_probe
-      failed_when: false
-      ignore_errors: true
-
-    - name: End host if SSH not reachable
-      ansible.builtin.meta: end_host
-      when: ssh_probe is failed or ssh_probe.state is not defined
-
-    - name: Gather facts safely (only runs for remaining hosts)
-      ansible.builtin.setup:
-      failed_when: false
-      ignore_errors: true
+    - name: Bootstrap & validate host reachability
+      import_tasks: ../common/bootstrap_and_check.yml
 
   tasks:
     - name: Refresh apt cache (if stale)
