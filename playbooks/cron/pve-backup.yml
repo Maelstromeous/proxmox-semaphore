@@ -36,6 +36,18 @@
       when: vg_free_gib | float < min_free_gib
       tags: [backup, preflight]
   tasks:
+    - name: Unmount stale snapshot if present from a previous failed run
+      ansible.posix.mount:
+        path: "{{ snap_mount }}"
+        state: unmounted
+      tags: [backup, setup]
+    - name: Remove stale LVM snapshot if present from a previous failed run
+      ansible.builtin.lvol:
+        vg: "{{ vg_name }}"
+        lv: "{{ snap_name }}"
+        state: absent
+        force: true
+      tags: [backup, setup]
     - name: Ensure snapshot mount point exists
       ansible.builtin.file:
         path: "{{ snap_mount }}"
@@ -75,7 +87,7 @@
         state: ephemeral
       tags: [backup, snapshot]
     - name: Sync snapshot to network share (first run — no link-dest)
-      ansible.builtin.command: >
+      ansible.builtin.shell: >
         rsync -aAX
         --stats
         --exclude=/proc/*
@@ -94,17 +106,13 @@
         --delete
         {{ snap_mount }}/
         {{ backup_dest }}/
+        > /var/log/pve-backup-rsync.log 2>&1
       when: existing_backups.files | length == 0
       register: rsync_result_first
       changed_when: rsync_result_first.rc == 0
       tags: [backup, sync]
-    - name: Print rsync stats (first run)
-      ansible.builtin.debug:
-        msg: "{{ rsync_result_first.stdout_lines }}"
-      when: rsync_result_first is not skipped
-      tags: [backup, sync]
     - name: Sync snapshot to network share (incremental — with link-dest)
-      ansible.builtin.command: >
+      ansible.builtin.shell: >
         rsync -aAX
         --stats
         --exclude=/proc/*
@@ -124,14 +132,19 @@
         --link-dest={{ link_dest }}
         {{ snap_mount }}/
         {{ backup_dest }}/
+        > /var/log/pve-backup-rsync.log 2>&1
       when: existing_backups.files | length > 0
       register: rsync_result_incremental
       changed_when: rsync_result_incremental.rc == 0
       tags: [backup, sync]
-    - name: Print rsync stats (incremental)
+    - name: Print rsync summary from log
+      ansible.builtin.command: tail -15 /var/log/pve-backup-rsync.log
+      register: rsync_log_tail
+      changed_when: false
+      tags: [backup, sync]
+    - name: Show rsync summary
       ansible.builtin.debug:
-        msg: "{{ rsync_result_incremental.stdout_lines }}"
-      when: rsync_result_incremental is not skipped
+        msg: "{{ rsync_log_tail.stdout_lines }}"
       tags: [backup, sync]
     - name: Write backup metadata file
       ansible.builtin.copy:
