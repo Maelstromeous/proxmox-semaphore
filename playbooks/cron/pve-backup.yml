@@ -31,7 +31,7 @@
     - name: Abort if VG free space is below threshold
       ansible.builtin.fail:
         msg: >
-          VG '{{ vg_name }}' has {{ vg_free_gib | round(1) }} GiB free —
+          VG '{{ vg_name }}' has {{ vg_free_gib | float | round(1) }} GiB free —
           {{ min_free_gib }} GiB required. Aborting before snapshot.
       when: vg_free_gib | float < min_free_gib
       tags: [backup, preflight]
