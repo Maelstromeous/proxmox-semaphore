@@ -1,6 +1,6 @@
 ---
 - name: Back up PVE root filesystem to network share
-  hosts: pve_hosts
+  hosts: pve_nodes
   ignore_unreachable: true
   become: true
   gather_facts: true # required for ansible_date_time in backup naming and metadata
