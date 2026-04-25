@@ -1,9 +1,9 @@
 ---
 - name: Back up PVE root filesystem to network share
-  hosts: pve_nodes
+  hosts: pve_hosts
   ignore_unreachable: true
   become: true
-  gather_facts: true # required for ansible_date_time in backup metadata
+  gather_facts: true # required for ansible_date_time in backup naming and metadata
   vars:
     vg_name: pve
     root_lv: root
@@ -12,7 +12,9 @@
     snap_device: "/dev/{{ vg_name }}/{{ snap_name }}"
     snap_mount: /mnt/pve-root-snap
     backup_base: /mnt/pve/unas-pro-Proxmox/pve-backups
-    backup_dest: "{{ backup_base }}/{{ inventory_hostname }}"
+    backup_host_base: "{{ backup_base }}/{{ inventory_hostname }}"
+    backup_dest: "{{ backup_host_base }}/{{ ansible_date_time.iso8601_basic_short }}"
+    snapshot_retention: 7
     min_free_gib: 12
   pre_tasks:
     - name: Bootstrap & validate host reachability
@@ -40,12 +42,24 @@
         state: directory
         mode: '0700'
       tags: [backup, setup]
-    - name: Ensure per-host destination directory exists on share
+    - name: Ensure per-host backup directory exists on share
       ansible.builtin.file:
-        path: "{{ backup_dest }}"
+        path: "{{ backup_host_base }}"
         state: directory
         mode: '0750'
       tags: [backup, setup]
+    - name: Find existing backups for link-dest reference
+      ansible.builtin.find:
+        paths: "{{ backup_host_base }}"
+        file_type: directory
+        recurse: false
+      register: existing_backups
+      tags: [backup, rotate]
+    - name: Set link-dest to most recent existing backup
+      ansible.builtin.set_fact:
+        link_dest: "{{ (existing_backups.files | sort(attribute='mtime') | last).path }}"
+      when: existing_backups.files | length > 0
+      tags: [backup, rotate]
     - name: Create LVM snapshot of root LV
       ansible.builtin.command: >
         lvcreate -L{{ snap_size }} -s -n {{ snap_name }} /dev/{{ vg_name }}/{{ root_lv }}
@@ -60,22 +74,64 @@
         opts: ro,noatime
         state: ephemeral
       tags: [backup, snapshot]
-    - name: Sync snapshot to network share
+    - name: Sync snapshot to network share (first run — no link-dest)
       ansible.builtin.command: >
         rsync -aAX
+        --stats
         --exclude=/proc/*
         --exclude=/sys/*
         --exclude=/dev/*
         --exclude=/run/*
+        --exclude=/mnt/*
         --exclude=/tmp/*
         --exclude=/var/tmp/*
         --exclude=/var/cache/*
         --exclude=/var/log/journal/*
+        --exclude=/var/lib/vz/dump/*
+        --exclude=/var/lib/vz/template/iso/*
+        --exclude=/var/lib/vz/template/cache/*
+        --exclude=/var/lib/vz/images/*
         --delete
         {{ snap_mount }}/
         {{ backup_dest }}/
-      register: rsync_result
-      changed_when: rsync_result.rc == 0
+      when: existing_backups.files | length == 0
+      register: rsync_result_first
+      changed_when: rsync_result_first.rc == 0
+      tags: [backup, sync]
+    - name: Print rsync stats (first run)
+      ansible.builtin.debug:
+        msg: "{{ rsync_result_first.stdout_lines }}"
+      when: rsync_result_first is not skipped
+      tags: [backup, sync]
+    - name: Sync snapshot to network share (incremental — with link-dest)
+      ansible.builtin.command: >
+        rsync -aAX
+        --stats
+        --exclude=/proc/*
+        --exclude=/sys/*
+        --exclude=/dev/*
+        --exclude=/run/*
+        --exclude=/mnt/*
+        --exclude=/tmp/*
+        --exclude=/var/tmp/*
+        --exclude=/var/cache/*
+        --exclude=/var/log/journal/*
+        --exclude=/var/lib/vz/dump/*
+        --exclude=/var/lib/vz/template/iso/*
+        --exclude=/var/lib/vz/template/cache/*
+        --exclude=/var/lib/vz/images/*
+        --delete
+        --link-dest={{ link_dest }}
+        {{ snap_mount }}/
+        {{ backup_dest }}/
+      when: existing_backups.files | length > 0
+      register: rsync_result_incremental
+      changed_when: rsync_result_incremental.rc == 0
+      tags: [backup, sync]
+    - name: Print rsync stats (incremental)
+      ansible.builtin.debug:
+        msg: "{{ rsync_result_incremental.stdout_lines }}"
+      when: rsync_result_incremental is not skipped
       tags: [backup, sync]
     - name: Write backup metadata file
       ansible.builtin.copy:
@@ -85,6 +141,7 @@
           completed: {{ ansible_date_time.iso8601 }}
           source: /dev/{{ vg_name }}/{{ root_lv }}
           snapshot_size: {{ snap_size }}
+          link_dest: {{ link_dest | default('none') }}
         mode: '0644'
       tags: [backup, sync]
     - name: Unmount snapshot
@@ -99,3 +156,17 @@
         state: absent
         force: true
       tags: [backup, cleanup]
+    - name: Find all backup snapshots for rotation
+      ansible.builtin.find:
+        paths: "{{ backup_host_base }}"
+        file_type: directory
+        recurse: false
+      register: all_backups
+      tags: [backup, rotate]
+    - name: Remove oldest backups beyond retention limit
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (all_backups.files | sort(attribute='mtime'))[: -(snapshot_retention)] }}"
+      when: all_backups.files | length > snapshot_retention
+      tags: [backup, rotate]
