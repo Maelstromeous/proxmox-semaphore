@@ -1,0 +1,101 @@
+---
+- name: Back up PVE root filesystem to network share
+  hosts: pve_nodes
+  ignore_unreachable: true
+  become: true
+  gather_facts: true # required for ansible_date_time in backup metadata
+  vars:
+    vg_name: pve
+    root_lv: root
+    snap_name: pve-root-snap
+    snap_size: 15G
+    snap_device: "/dev/{{ vg_name }}/{{ snap_name }}"
+    snap_mount: /mnt/pve-root-snap
+    backup_base: /mnt/pve/unas-pro-Proxmox/pve-backups
+    backup_dest: "{{ backup_base }}/{{ inventory_hostname }}"
+    min_free_gib: 12
+  pre_tasks:
+    - name: Bootstrap & validate host reachability
+      import_tasks: ../common/bootstrap-and-check.yml
+    - name: Check available VG free space
+      ansible.builtin.command: vgs {{ vg_name }} --noheadings --units g -o vg_free
+      register: vg_free_output
+      changed_when: false
+      tags: [backup, preflight]
+    - name: Parse VG free space into a fact
+      ansible.builtin.set_fact:
+        vg_free_gib: "{{ vg_free_output.stdout | trim | regex_replace('[^0-9.]', '') | float }}"
+      tags: [backup, preflight]
+    - name: Abort if VG free space is below threshold
+      ansible.builtin.fail:
+        msg: >
+          VG '{{ vg_name }}' has {{ vg_free_gib | round(1) }} GiB free —
+          {{ min_free_gib }} GiB required. Aborting before snapshot.
+      when: vg_free_gib | float < min_free_gib
+      tags: [backup, preflight]
+  tasks:
+    - name: Ensure snapshot mount point exists
+      ansible.builtin.file:
+        path: "{{ snap_mount }}"
+        state: directory
+        mode: '0700'
+      tags: [backup, setup]
+    - name: Ensure per-host destination directory exists on share
+      ansible.builtin.file:
+        path: "{{ backup_dest }}"
+        state: directory
+        mode: '0750'
+      tags: [backup, setup]
+    - name: Create LVM snapshot of root LV
+      ansible.builtin.command: >
+        lvcreate -L{{ snap_size }} -s -n {{ snap_name }} /dev/{{ vg_name }}/{{ root_lv }}
+      register: snap_create
+      changed_when: snap_create.rc == 0
+      tags: [backup, snapshot]
+    - name: Mount snapshot read-only
+      ansible.posix.mount:
+        path: "{{ snap_mount }}"
+        src: "{{ snap_device }}"
+        fstype: ext4
+        opts: ro,noatime
+        state: ephemeral
+      tags: [backup, snapshot]
+    - name: Sync snapshot to network share
+      ansible.builtin.command: >
+        rsync -aAX
+        --exclude=/proc/*
+        --exclude=/sys/*
+        --exclude=/dev/*
+        --exclude=/run/*
+        --exclude=/tmp/*
+        --exclude=/var/tmp/*
+        --exclude=/var/cache/*
+        --exclude=/var/log/journal/*
+        --delete
+        {{ snap_mount }}/
+        {{ backup_dest }}/
+      register: rsync_result
+      changed_when: rsync_result.rc == 0
+      tags: [backup, sync]
+    - name: Write backup metadata file
+      ansible.builtin.copy:
+        dest: "{{ backup_dest }}/.backup-meta"
+        content: |
+          host: {{ inventory_hostname }}
+          completed: {{ ansible_date_time.iso8601 }}
+          source: /dev/{{ vg_name }}/{{ root_lv }}
+          snapshot_size: {{ snap_size }}
+        mode: '0644'
+      tags: [backup, sync]
+    - name: Unmount snapshot
+      ansible.posix.mount:
+        path: "{{ snap_mount }}"
+        state: unmounted
+      tags: [backup, cleanup]
+    - name: Remove LVM snapshot
+      ansible.builtin.lvol:
+        vg: "{{ vg_name }}"
+        lv: "{{ snap_name }}"
+        state: absent
+        force: true
+      tags: [backup, cleanup]
