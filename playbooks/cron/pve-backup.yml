@@ -19,6 +19,18 @@
   pre_tasks:
     - name: Bootstrap & validate host reachability
       import_tasks: ../common/bootstrap-and-check.yml
+    - name: Unmount stale snapshot if present from a previous failed run
+      ansible.posix.mount:
+        path: "{{ snap_mount }}"
+        state: unmounted
+      tags: [backup, preflight]
+    - name: Remove stale LVM snapshot if present from a previous failed run
+      ansible.builtin.lvol:
+        vg: "{{ vg_name }}"
+        lv: "{{ snap_name }}"
+        state: absent
+        force: true
+      tags: [backup, preflight]
     - name: Check available VG free space
       ansible.builtin.command: vgs {{ vg_name }} --noheadings --units g -o vg_free
       register: vg_free_output
@@ -36,18 +48,6 @@
       when: vg_free_gib | float < min_free_gib
       tags: [backup, preflight]
   tasks:
-    - name: Unmount stale snapshot if present from a previous failed run
-      ansible.posix.mount:
-        path: "{{ snap_mount }}"
-        state: unmounted
-      tags: [backup, setup]
-    - name: Remove stale LVM snapshot if present from a previous failed run
-      ansible.builtin.lvol:
-        vg: "{{ vg_name }}"
-        lv: "{{ snap_name }}"
-        state: absent
-        force: true
-      tags: [backup, setup]
     - name: Ensure snapshot mount point exists
       ansible.builtin.file:
         path: "{{ snap_mount }}"
